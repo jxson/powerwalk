@@ -1,5 +1,4 @@
-powerwalk
-=========
+# powerwalk [![Build Status](https://travis-ci.org/jxson/powerwalk.png?branch=master)](https://travis-ci.org/jxson/powerwalk)
 
 Recursively walks a directory and emits filenames. Also supports additional stats and content events (if you want them).
 
