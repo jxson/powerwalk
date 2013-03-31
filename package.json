@@ -21,5 +21,9 @@
   "author": "Jason Campbell <jason@js.la> (http://artifact.sh)",
   "license": "MIT",
   "readmeFilename": "README.md",
-  "gitHead": "2bce49cc8d60801864b60e94eb58a130caa263af"
+  "gitHead": "2bce49cc8d60801864b60e94eb58a130caa263af",
+  "dependencies": {
+    "graceful-fs": "1.2.0",
+    "glob": "3.1.21"
+  }
 }

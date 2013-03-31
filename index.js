@@ -8,11 +8,13 @@ module.exports = function(dir){
   return Object.create(EE.prototype, { walk: { value: walk }
   , stat: { value: stat }
   , read: { value: read }
+  , finish: { value: finish }
+  , wants: { value: wants }
   , queue: { value: [] }
   }).walk(dir)
 }
 
-function walk(dir){
+function walk(dirname){
   var walker = this
     , gloptions = { cwd: dirname
       , strict: true
@@ -42,9 +44,40 @@ function stat(match){
   fs.stat(pathname, function(err, stats){
     if (err) return walker.emit('error', err)
 
-    walker.queue.splice(walker.queue.indexOf(pathname), 1)
+    if (stats.isFile()) {
+      var file = { filename: pathname, stats: stats }
 
-    if (stats.isFile()) walker.emit('file', pathname)
-    if (walker.queue.length === 0) walker.emit('end')
+      if (walker.wants('file')) walker.emit('file', file.filename)
+      if (walker.wants('stat')) walker.emit('stat', file)
+
+      // Don't read if there isn't a listener
+      if (walker.wants('read')) walker.read(file)
+      else walker.finish(file.filename)
+    } else walker.finish(pathname)
   })
+}
+
+function read(file){
+  var walker = this
+
+  fs.readFile(file.filename, 'utf8', function(err, data){
+    if (err) return walker.emit('error', err)
+
+    file.data = data
+
+    walker.emit('read', file)
+    walker.finish(file.filename)
+  })
+}
+
+// Shorthand for detecting listeners
+function wants(event){
+  return this.listeners(event).length > 0
+}
+
+function finish(pathname){
+  var walker = this
+
+  walker.queue.splice(walker.queue.indexOf(pathname), 1)
+  if (walker.queue.length === 0) walker.emit('end')
 }
