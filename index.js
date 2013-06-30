@@ -11,6 +11,7 @@ module.exports = function(dirname){
       , nosort: true
       }
     , queue = []
+    , globin = true
 
   // TODO: barf when dirname isn't a dir
   // NOTE: this used to intentionally wait until the glob end event, there is some
@@ -19,6 +20,7 @@ module.exports = function(dirname){
   glob('**', options)
   .on('error', function(err){ walker.emit('error', err) })
   .on('match', stat)
+  .on('end', function(){ globin = false })
 
   return walker
 
@@ -53,7 +55,7 @@ module.exports = function(dirname){
   function finish(pathname){
     queue.splice(queue.indexOf(pathname), 1)
 
-    if (queue.length === 0) walker.emit('end')
+    if (queue.length === 0 && !globin) walker.emit('end')
   }
 
   function wants(event){
