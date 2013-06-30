@@ -1,7 +1,7 @@
 {
   "name": "powerwalk",
   "version": "0.0.1",
-  "description": "Recursively walks a directory and emits filenames. Also supports additional stats and content events (if you want them).",
+  "description": "Recursively walks a directory and emits filenames. Supports additional stat and read events (if you want them).",
   "main": "index.js",
   "scripts": {
     "test": "mocha test/test*.js"
