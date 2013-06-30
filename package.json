@@ -24,7 +24,8 @@
   "gitHead": "2bce49cc8d60801864b60e94eb58a130caa263af",
   "dependencies": {
     "graceful-fs": "1.2.0",
-    "glob": "3.1.21"
+    "glob": "3.1.21",
+    "through": "2.3.4"
   },
   "devDependencies": {
     "mocha": "~1.8.2"
