@@ -13,13 +13,12 @@ module.exports = function(dirname){
     , queue = []
 
   // TODO: barf when dirname isn't a dir
-  // NOTE: this intentionally waits until the glob end event, there is some
-  // clean up that happens there which prevents things like double entries etc
-  glob('**', options, function(err, matches){
-    if (err) walker.emit('error', err)
-
-    matches.forEach(stat)
-  })
+  // NOTE: this used to intentionally wait until the glob end event, there is some
+  // clean up that happens there which prevents things like double entries etc.
+  // see glob option nounique if this becomes an issue again.
+  glob('**', options)
+  .on('error', function(err){ walker.emit('error', err) })
+  .on('match', stat)
 
   return walker
 
@@ -73,10 +72,7 @@ module.exports = function(dirname){
   }
 }
 
-function write(data){
+// noop for now
+function write(data){}
 
-}
-
-function end(){
-
-}
+function end(){}
