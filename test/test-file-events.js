@@ -15,7 +15,7 @@ describe('file events', function(){
   })
 
   it('emits filenames recursively', function(){
-    assert.equal(files.length, 4)
+    assert.equal(files.length, 4, 'Should emit 4 files')
 
     files.forEach(function(f){
       assert.equal(typeof f, 'string')

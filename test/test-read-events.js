@@ -15,7 +15,7 @@ describe('read events', function(){
   })
 
   it('emits stats recursively', function(){
-    assert.equal(files.length, 4)
+    assert.equal(files.length, 4, 'Should emit 4 read events')
 
     files.forEach(function(f){
       assert.equal(typeof f, 'object')

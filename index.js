@@ -1,83 +1,82 @@
 
-var fs = require('graceful-fs')
-  , path = require('path')
+var through = require('through')
   , glob = require('glob')
-  , EE = require('events').EventEmitter
+  , fs = require('graceful-fs')
+  , path = require('path')
 
-module.exports = function(dir){
-  return Object.create(EE.prototype, { walk: { value: walk }
-  , stat: { value: stat }
-  , read: { value: read }
-  , finish: { value: finish }
-  , wants: { value: wants }
-  , queue: { value: [] }
-  }).walk(dir)
-}
-
-function walk(dirname){
-  var walker = this
-    , gloptions = { cwd: dirname
+module.exports = function(dirname){
+  var walker = through(write, end)
+    , options = { cwd: dirname
       , strict: true
+      , nosort: true
       }
+    , queue = []
 
-  walker.cwd = dirname
+  // TODO: barf when dirname isn't a dir
+  // NOTE: this intentionally waits until the glob end event, there is some
+  // clean up that happens there which prevents things like double entries etc
+  glob('**', options, function(err, matches){
+    if (err) walker.emit('error', err)
 
-  glob('**', gloptions, function(err, matches){
-    if (err) return walker.emit('error', err)
-
-    matches.forEach(function(match){
-      if (match.length === 0) return
-      else walker.stat(match)
-    })
+    matches.forEach(stat)
   })
 
   return walker
+
+  function stat(match){
+    // don't stat empty strings
+    if (match.length === 0) return
+
+    var pathname = path.resolve(options.cwd, match)
+
+    queue.push(pathname)
+
+    fs.stat(pathname, function(err, stats){
+      if (err) return walker.emit('error', err)
+
+      if (stats.isFile()) {
+        var file = { filename: pathname
+            , stats: stats
+            }
+
+        walker.emit('data', pathname) // the data event for the pipe method
+        walker.emit('file', pathname)
+
+        if (wants('stat')) walker.emit('stat', file)
+
+        if (wants('read')) read(file)
+        else finish(pathname)
+
+      } else finish(pathname)
+    })
+  }
+
+  function finish(pathname){
+    queue.splice(queue.indexOf(pathname), 1)
+
+    if (queue.length === 0) walker.emit('end')
+  }
+
+  function wants(event){
+    return walker.listeners(event).length > 0
+  }
+
+  function read(file){
+    fs.readFile(file.filename, 'utf8', function(err, data){
+      if (err) return walker.emit('error', err)
+
+      file.data = data
+
+      walker.emit('read', file)
+      finish(file.filename)
+    })
+  }
 }
 
-function stat(match){
-  var walker = this
-    , queue = walker.queue
-    , pathname = path.join(walker.cwd, match)
+function write(data){
 
-  walker.queue.push(pathname)
-
-  fs.stat(pathname, function(err, stats){
-    if (err) return walker.emit('error', err)
-
-    if (stats.isFile()) {
-      var file = { filename: pathname, stats: stats }
-
-      if (walker.wants('file')) walker.emit('file', file.filename)
-      if (walker.wants('stat')) walker.emit('stat', file)
-
-      // Don't read if there isn't a listener
-      if (walker.wants('read')) walker.read(file)
-      else walker.finish(file.filename)
-    } else walker.finish(pathname)
-  })
 }
 
-function read(file){
-  var walker = this
+function end(){
 
-  fs.readFile(file.filename, 'utf8', function(err, data){
-    if (err) return walker.emit('error', err)
-
-    file.data = data
-
-    walker.emit('read', file)
-    walker.finish(file.filename)
-  })
-}
-
-// Shorthand for detecting listeners
-function wants(event){
-  return this.listeners(event).length > 0
-}
-
-function finish(pathname){
-  var walker = this
-
-  walker.queue.splice(walker.queue.indexOf(pathname), 1)
-  if (walker.queue.length === 0) walker.emit('end')
 }
