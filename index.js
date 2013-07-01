@@ -40,7 +40,7 @@ module.exports = function(dirname){
             , stats: stats
             }
 
-        walker.emit('data', pathname) // the data event for the pipe method
+        walker.queue(pathname) // for the through pipe
         walker.emit('file', pathname)
 
         if (wants('stat')) walker.emit('stat', file)
