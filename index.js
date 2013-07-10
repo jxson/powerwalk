@@ -13,14 +13,19 @@ module.exports = function(dirname){
     , queue = []
     , globin = true
 
-  // TODO: barf when dirname isn't a dir
-  // NOTE: this used to intentionally wait until the glob end event, there is some
-  // clean up that happens there which prevents things like double entries etc.
-  // see glob option nounique if this becomes an issue again.
-  glob('**', options)
-  .on('error', function(err){ walker.emit('error', err) })
-  .on('match', stat)
-  .on('end', function(){ globin = false })
+  fs.exists(dirname, function(exists){
+    if (! exists) {
+      return walker.emit('error', new Error(dirname + ' does not exist'))
+    }
+
+    // NOTE: this used to intentionally wait until the glob end event, there is some
+    // clean up that happens there which prevents things like double entries etc.
+    // see glob option nounique if this becomes an issue again.
+    glob('**', options)
+    .on('error', function(err){ walker.emit('error', err) })
+    .on('match', stat)
+    .on('end', function(){ globin = false })
+  })
 
   return walker
 
@@ -55,7 +60,9 @@ module.exports = function(dirname){
   function finish(pathname){
     queue.splice(queue.indexOf(pathname), 1)
 
-    if (queue.length === 0 && !globin) walker.emit('end')
+    if (queue.length === 0 && !globin) {
+      walker.emit('end')
+    }
   }
 
   function wants(event){
