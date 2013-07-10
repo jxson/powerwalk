@@ -23,12 +23,12 @@
   "readmeFilename": "README.md",
   "gitHead": "2bce49cc8d60801864b60e94eb58a130caa263af",
   "dependencies": {
-    "graceful-fs": "1.2.0",
-    "glob": "3.1.21",
-    "through": "2.3.4"
+    "graceful-fs": "~1.2.3",
+    "through": "~2.3.4",
+    "glob": "~3.2.1"
   },
   "devDependencies": {
-    "mocha": "~1.8.2"
+    "mocha": "~1.12.0"
   },
   "bugs": {
     "url": "https://github.com/jxson/powerwalk/issues"
