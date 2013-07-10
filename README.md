@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/jxson/powerwalk.png?branch=master)](https://travis-ci.org/jxson/powerwalk)
 
-[![Dependency Status](https://david-dm.org/jxson/powerwalk)](https://david-dm.org/jxson/powerwalk.png)
+[![Dependency Status](https://david-dm.org/jxson/powerwalk.png)](https://david-dm.org/jxson/powerwalk)
 
 Recursively walks a directory and emits filenames. Supports additional stat and read events (if you want them).
 
