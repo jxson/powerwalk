@@ -29,5 +29,11 @@
   },
   "devDependencies": {
     "mocha": "~1.8.2"
+  },
+  "bugs": {
+    "url": "https://github.com/jxson/powerwalk/issues"
+  },
+  "directories": {
+    "test": "test"
   }
 }
