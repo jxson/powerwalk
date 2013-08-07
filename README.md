@@ -1,6 +1,10 @@
-# powerwalk [![Build Status](https://travis-ci.org/jxson/powerwalk.png?branch=master)](https://travis-ci.org/jxson/powerwalk) [![Dependency Status](https://david-dm.org/jxson/powerwalk.png)](https://david-dm.org/jxson/powerwalk)
+# powerwalk
 
-Recursively walks a directory and emits filenames. Supports additional stat and read events (if you want them).
+[![NPM](https://nodei.co/npm/powerwalk.png)](https://nodei.co/npm/powerwalk/)
+
+> Recursively walks a directory and emits filenames. Supports additional stat and read events (if you want them).
+
+[![Build Status](https://travis-ci.org/jxson/powerwalk.png?branch=master)](https://travis-ci.org/jxson/powerwalk) [![Dependency Status](https://david-dm.org/jxson/powerwalk.png)](https://david-dm.org/jxson/powerwalk)
 
 I keep writing and re-writing this code in one form or another for most of my projects. I thought it might be useful to some of you. There are a few similar packages on npm already but none seem to have either the narrow focus I wanted or they use straight `fs` calls which can be harsh when EMFILE happens.
 
