@@ -10,7 +10,9 @@ describe('file events', function(){
   before(function(done){
     powerwalk(fixtures)
     .on('error', done)
-    .on('file', function(filename){ files.push(filename) })
+    .on('file', function(filename){
+      files.push(filename)
+    })
     .on('end', done)
   })
 

@@ -23,9 +23,9 @@
   "readmeFilename": "README.md",
   "gitHead": "2bce49cc8d60801864b60e94eb58a130caa263af",
   "dependencies": {
-    "graceful-fs": "~2.0.0",
-    "through": "~2.3.4",
-    "glob": "~3.2.1"
+    "glob": "^4.0.5",
+    "graceful-fs": "^3.0.2",
+    "through2": "^0.6.1"
   },
   "devDependencies": {
     "mocha": "~1.12.0"

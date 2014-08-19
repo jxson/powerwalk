@@ -3,7 +3,7 @@ var assert = require('assert')
   , powerwalk = require('../')
   , path = require('path')
   , fixtures = path.resolve(__dirname, './fixtures')
-  , through = require('through')
+  , through2 = require('through2')
 
 describe('powerwalk(dir).pipe(dest)', function(){
   var files = []
@@ -12,10 +12,14 @@ describe('powerwalk(dir).pipe(dest)', function(){
 
     powerwalk(fixtures)
     .on('error', done)
-    .pipe(through(write, done))
+    .pipe(through2(write, function(callback) {
+      done()
+      callback()
+    }))
 
-    function write(filename){
-      files.push(filename)
+    function write(chunk, enc, callback){
+      files.push(chunk.toString())
+      callback()
     }
   })
 
