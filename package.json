@@ -1,6 +1,6 @@
 {
   "name": "powerwalk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Recursively walks a directory and emits filenames. Supports additional stat and read events (if you want them).",
   "main": "index.js",
   "scripts": {
