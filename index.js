@@ -26,11 +26,6 @@ module.exports = function(dirname){
     .on('match', onmatch)
   })
 
-  // For non pipe/stream consumption, end will not emit without a consumer
-  stream.on('data', function(chunk) {
-    stream.emit('file', chunk.toString())
-  })
-
   return stream
 
   function onmatch(match) {
