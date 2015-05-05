@@ -14,7 +14,7 @@ clean:
 	@$(RM) -fr npm-debug.log
 
 test: node_modules
-	prova test/test-powerwalk.js
+	tape test/test-powerwalk.js
 
 release:
 	npm version $(VERSION)

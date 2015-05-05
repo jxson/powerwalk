@@ -18,7 +18,7 @@
     "fs",
     "util"
   ],
-  "author": "Jason Campbell <jason@js.la> (http://artifact.sh)",
+  "author": "Jason Campbell <jasoncampbell@google.com> (http://artifact.sh)",
   "license": "MIT",
   "dependencies": {
     "glob": "^4.0.5",
@@ -26,7 +26,7 @@
     "through2": "^0.6.1"
   },
   "devDependencies": {
-    "prova": "^1.14.0"
+    "tape": "^4.0.0"
   },
   "bugs": {
     "url": "https://github.com/jxson/powerwalk/issues"
