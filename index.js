@@ -1,3 +1,4 @@
+var debug = require('debug')('powerwalk')
 
 var through2 = require('through2')
   , glob = require('glob')
@@ -63,6 +64,7 @@ module.exports = function(dirname){
   }
 
   function flush(callback) {
+    debug('flushed')
     callback()
   }
 

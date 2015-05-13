@@ -3,24 +3,30 @@ var powerwalk = require('../')
 var test = require('tape')
 var path = require('path')
 var fixtures = path.resolve(__dirname, './fixtures')
-var through2 = require('through2')
+var through = require('through2')
 var fs = require('graceful-fs')
 
-test('powerwalk(source).pipe(stream)', function(t) {
-  var stream = through2(write)
+var format = require('format')
+var expected = require('./expected')
 
-  t.plan(8)
+test('powerwalk', function(t) {
+  t.equal(typeof powerwalk, 'function')
+  t.end()
+})
+
+test('powerwalk(source).pipe(stream)', function(t) {
+  var stream = through(write, flush)
+  var files = []
 
   powerwalk(fixtures).pipe(stream)
 
-  function write(chunk, enc, callback){
-    var filename = chunk.toString()
-
-    fs.exists(filename, function(exists) {
-      t.ok(exists, 'filename should exist')
-      t.ok(filename.match(/fixtures\/(.*)\.md$/), 'should be a fixture')
-    })
-
+  function write(buffer, enc, callback){
+    files.push(buffer.toString())
     callback()
+  }
+
+  function flush() {
+    t.same(files, expected.files)
+    t.end()
   }
 })
