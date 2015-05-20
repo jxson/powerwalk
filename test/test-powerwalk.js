@@ -9,17 +9,15 @@ var format = require('format')
 var expected = require('./expected')
 
 var EventEmitter = require('events').EventEmitter
-var Transform = require('stream').Duplex
+var Stream = require('stream').Stream
 
 test('var stream = powerwalk(options)', function(t) {
-  t.equal(typeof powerwalk, 'function')
-  t.ok(new powerwalk() instanceof powerwalk, 'should work with "new"')
-  t.ok(powerwalk() instanceof powerwalk, 'should not require "new"')
   t.ok(powerwalk() instanceof EventEmitter, 'should be an event emitter')
+  t.ok(powerwalk() instanceof Stream, 'should be a stream')
   t.end()
 })
 
-test.skip('powerwalk(source).pipe(stream)', function(t) {
+test('powerwalk(source).pipe(stream)', function(t) {
   var stream = through(write, flush)
   var files = []
 
@@ -27,7 +25,7 @@ test.skip('powerwalk(source).pipe(stream)', function(t) {
 
   function write(buffer, enc, callback){
     files.push(buffer.toString())
-    callback()
+    callback(null, buffer)
   }
 
   function flush() {
