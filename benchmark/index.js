@@ -3,6 +3,8 @@ var inherits = require('util').inherits
 
 module.exports = Benchmark
 
+// TODO: varience, mean, etc. report
+// TODO: harness
 function Benchmark(name, iterations, callback) {
   if (!(this instanceof Benchmark)) {
     return new Benchmark(name, iterations, callback)
