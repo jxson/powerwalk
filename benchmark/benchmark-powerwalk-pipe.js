@@ -4,7 +4,7 @@ var path = require('path')
 var fixtures = path.resolve(__dirname, '../test/fixtures')
 var through = require('through2')
 
-benchmark('example', 100, function(done) {
+benchmark('example', 3000, function(done) {
   var stream = through(write, flush)
   var files = []
 

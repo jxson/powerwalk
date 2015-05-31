@@ -24,6 +24,8 @@
     "debug": "^2.2.0",
     "glob": "^4.0.5",
     "graceful-fs": "^3.0.2",
+    "inherits": "^2.0.1",
+    "prr": "^1.0.1",
     "readable-stream": "^1.0.33",
     "through2": "^0.6.1",
     "xtend": "^4.0.0"

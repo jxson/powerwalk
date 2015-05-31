@@ -1,158 +1,122 @@
-var debug = require('debug')('powerwalk')
-var through = require('through2')
-var path = require('path')
-var fs = require('fs')
-var stat = fs.lstat
-var read = fs.readdir
+const debug = require('debug')('powerwalk')
+const path = require('path')
+const Transform = require('readable-stream/transform')
+const inherits = require('inherits')
+const prr = require('prr')
+const fs = require('graceful-fs')
+const objectType = require('./object-type')
+const extend = require('xtend')
+const defaults = {
+  highWaterMark: 16
+}
 
-module.exports = walk
-
-function walk(dirname, options, callback) {
-  dirname = path.resolve(dirname || '')
-
-  options = {
-    highWaterMark: 16
+module.exports = function walk(dirname, options, callback) {
+  // TODO: scrub args
+  if (dirname) {
+    dirname = path.resolve(dirname || '')
   }
-
-  var stream = through(options, transform, flush)
-
-  stream.queue = []
 
   debug('starting walk at %s', dirname)
 
-  stream.dirs = []
+  var stream = new Powerwalk(options)
 
-  stream.on('directory', function(directory) {
-    stream.dirs.push(directory)
-  })
-
-
-  fs.exists(dirname, function(exists) {
-    if (! exists) {
-      throw new Error('TODO: non-exisitng dir error')
-    } else {
-      stream.write(dirname)
-    }
-  })
+  // maybe do an fs.exisits to provide a non-mysterious error here.
+  if (dirname) {
+    stream.write(dirname)
+  }
 
   return stream
 }
 
-function transform(buffer, enc, callback) {
-  debug('transform %s', buffer)
+module.exports.Powerwalk = Powerwalk
 
-  var stream = this
-  var pathname = buffer.toString()
+function Powerwalk(options) {
+  options = extend(defaults, options)
 
-  debug('queue %s', pathname)
-  this.queue.push(pathname)
+  debug('initializing: %o', options)
 
-  stat(pathname, function(err, stats) {
-    if (err) return callback(err)
+  var powerwalk = this
 
-    debug('stat %s - %o', pathname, stats)
+  prr(powerwalk, '_q', [])
 
-    stream.emit('stat', pathname, stats)
-    stream.emit(type(stats), pathname)
-
-    if (type(stats) === 'directory') {
-      debug('directory: %s', pathname)
-
-      read(pathname, function(err, results) {
-        if (err) return callback(err)
-
-        each(results, function(item) {
-          stream.write(path.resolve(pathname, item))
-        })
-
-        callback()
-        done(pathname)
-      })
-    }
-
-    if (type(stats) === 'file') {
-      debug('file: %s', pathname)
-      callback(null, pathname)
-      done(pathname)
-    }
-  })
-
-  function dequeue(pathname) {
-    var start = stream.queue.indexOf(pathname)
-    var deleteCount = 1
-    stream.queue.splice(start, deleteCount)
-  }
-
-  function done(pathname) {
-    debug('dequeue %s', pathname)
-    dequeue(pathname)
-
-    if (stream.queue.length === 0) {
-      stream.end()
-    }
-  }
+  Transform.call(powerwalk, options)
 }
 
-function flush(callback) {
+inherits(Powerwalk, Transform)
+
+Powerwalk.prototype._transform = function (buffer, enc, callback) {
+  debug('transform %s', buffer)
+
+  var powerwalk = this
+  var pathname = buffer.toString()
+
+  powerwalk.queue(pathname)
+
+  fs.lstat(pathname, function(err, stats) {
+    if (err) return callback(err)
+
+    var type = objectType(stats)
+
+    powerwalk.emit('stat', pathname, stats)
+    powerwalk.emit(type, pathname)
+
+    switch (type) {
+      case 'directory':
+        readdir(pathname, powerwalk, callback)
+        break;
+      case 'file':
+        callback(null, pathname)
+        powerwalk.dequeue(pathname)
+        break;
+    }
+  })
+}
+
+Powerwalk.prototype.queue = function(pathname) {
+  this._q.push(pathname)
+}
+
+Powerwalk.prototype.dequeue = function(pathname, callback) {
+  var powerwalk = this
+  var start = powerwalk._q.indexOf(pathname)
+  var deleteCount = 1
+  var removed = powerwalk._q.splice(start, deleteCount)[0]
+
+  if (! removed) {
+    var err = new Error('Can not dequeue items that have not been queued.')
+    powerwalk.emit('error', err)
+    return
+  }
+
+  if (callback) {
+    callback(null, pathname)
+  }
+
+  if (powerwalk._q.length === 0) {
+    powerwalk.end()
+  }
+
+  return removed
+}
+
+Powerwalk.prototype._flush = function(callback) {
   debug('_flush')
   callback()
 }
 
-var methods = [
-  {
-    type: 'file',
-    fn: 'isFile'
-  },
-  {
-    type: 'directory',
-    fn: 'isDirectory'
-  },
-  {
-    type: 'blockdevice',
-    fn: 'isBlockDevice'
-  },
-  {
-    type: 'symlink',
-    fn: 'isSymbolicLink'
-  },
-  {
-    type: 'socket',
-    fn: 'isSocket'
-  },
-  {
-    type: 'fifo',
-    fn: 'isFIFO'
-  },
-  {
-    type: 'characterdevice',
-    fn: 'isCharacterDevice'
-  },
-  {
-    type: 'directory',
-    fn: 'isDirectory'
-  }
-]
+function readdir(pathname, powerwalk, callback) {
+  fs.readdir(pathname, done)
 
-function type(stats) {
-  var value
+  function done(err, results) {
+    if (err) return callback(err)
 
-  each(methods, function iterator(method, index, array) {
-    if (stats[method.fn]()) {
-      value = method.type
+    var length = results.length
+    for (var i = 0; i < length; i++) {
+      var resolved = path.resolve(pathname, results[i])
+      powerwalk.write(resolved)
     }
-  })
 
-  return value
-}
-
-function resolve(from, to) {
-  stream = this
-
-  return path.resolve(stream._start, from, to)
-}
-
-function each(array, iterator) {
-  for (var i = 0; i < array.length; i++) {
-    iterator(array[i], i, array)
+    callback()
+    powerwalk.dequeue(pathname)
   }
 }
