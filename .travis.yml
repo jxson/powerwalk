@@ -4,3 +4,10 @@ node_js:
   - 0.11
   - 0.12
   - iojs
+before_install:
+  - npm install -g npm
+env:
+  global:
+    # travis encrypt COVERALLS_REPO_TOKEN=$COVERALLS_REPO_TOKEN
+    secure: "Mj1dlEFUIxCGjXCF2txmVxBvbJiWJ5/rZkHlr4t0VebxU1K3P4p9NTCGTw/WwH8m+sPiGrzWfRGvwjSY1MPrVLThR2CuegLhrqo06OTJqaTDG3oeHPid0InlwpnQgskvHmS3e+iHVaTsO2d3L4m/cJLZU/Wv7UF7aTwueu2IVsE="
+script: make travis
