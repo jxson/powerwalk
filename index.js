@@ -7,7 +7,8 @@ const fs = require('graceful-fs')
 const objectType = require('./object-type')
 const extend = require('xtend')
 const defaults = {
-  highWaterMark: 16
+  // NOTE: prevents end from being called when there is not .on('data')
+  // highWaterMark: 16
 }
 
 module.exports = function walk(dirname, options, callback) {

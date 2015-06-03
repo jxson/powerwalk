@@ -15,7 +15,7 @@ test('powerwalk(source).pipe(stream)', function(t) {
   }
 
   function flush() {
-    t.same(files, fixtures.files)
+    t.same(files.sort(), fixtures.files)
     t.end()
   }
 })
