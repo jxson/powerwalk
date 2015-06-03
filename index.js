@@ -57,6 +57,7 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
 
     var type = objectType(stats)
 
+    powerwalk.emit('path', pathname)
     powerwalk.emit('stat', pathname, stats)
     powerwalk.emit(type, pathname)
 
@@ -76,7 +77,7 @@ Powerwalk.prototype.queue = function(pathname) {
   this._q.push(pathname)
 }
 
-Powerwalk.prototype.dequeue = function(pathname, callback) {
+Powerwalk.prototype.dequeue = function(pathname) {
   var powerwalk = this
   var start = powerwalk._q.indexOf(pathname)
   var deleteCount = 1
@@ -86,10 +87,6 @@ Powerwalk.prototype.dequeue = function(pathname, callback) {
     var err = new Error('Can not dequeue items that have not been queued.')
     powerwalk.emit('error', err)
     return
-  }
-
-  if (callback) {
-    callback(null, pathname)
   }
 
   if (powerwalk._q.length === 0) {

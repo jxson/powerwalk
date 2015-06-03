@@ -1,5 +1,6 @@
 var path = require('path')
 var expected = {
+  '': 'directory',
   'index.js': 'file',
   'a-dream': 'directory',
   'a-dream/foo.md': 'file',
@@ -12,13 +13,13 @@ var expected = {
   'a-dream/within/a-dream/within/a-dream': 'directory',
   'a-dream/within/a-dream/within/a-dream/norf.md': 'file'
 }
-var keys = Object.keys(expected)
+var keys = Object.keys(expected).sort()
 
 module.exports = {
   dirname: __dirname,
-  everything: expected,
+  everything: keys.map(resolve),
   files: keys.filter(file).map(resolve),
-  directories: keys.filter(directory)
+  directories: keys.filter(directory).map(resolve)
 }
 
 function file(key) {
