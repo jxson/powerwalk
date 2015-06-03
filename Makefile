@@ -1,4 +1,3 @@
-
 PATH := node_modules/.bin:$(PATH)
 SHELL := /bin/bash -e -o pipefail
 
@@ -14,7 +13,7 @@ clean:
 	@$(RM) -fr npm-debug.log
 
 test: node_modules
-	tape test/test-powerwalk.js
+	node test/index.js
 
 release:
 	npm version $(VERSION)

@@ -1,6 +1,6 @@
 var path = require('path')
-var fixtures = path.resolve(__dirname, './fixtures')
 var expected = {
+  'index.js': 'file',
   'a-dream': 'directory',
   'a-dream/foo.md': 'file',
   'a-dream/within': 'directory',
@@ -12,10 +12,10 @@ var expected = {
   'a-dream/within/a-dream/within/a-dream': 'directory',
   'a-dream/within/a-dream/within/a-dream/norf.md': 'file'
 }
-
 var keys = Object.keys(expected)
 
 module.exports = {
+  dirname: __dirname,
   everything: expected,
   files: keys.filter(file).map(resolve),
   directories: keys.filter(directory)
@@ -30,5 +30,5 @@ function directory(key) {
 }
 
 function resolve(pathname) {
-  return path.resolve(__dirname, 'fixtures', pathname)
+  return path.resolve(__dirname, pathname)
 }
