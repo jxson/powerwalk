@@ -1,13 +1,15 @@
 var powerwalk = require('../')
 var test = require('tape')
-var fixtures = require('./fixtures')
+var helpers = require('./helpers')
 var through = require('through2')
 
 test('powerwalk(source).pipe(stream)', function(t) {
+  var dirname = helpers.resolve('dreams')
+  var expected = helpers.expected('dreams')
   var stream = through(write, flush)
   var files = []
 
-  powerwalk(fixtures.dirname).pipe(stream)
+  powerwalk(dirname).pipe(stream)
 
   function write(buffer, enc, callback){
     files.push(buffer.toString())
@@ -15,7 +17,7 @@ test('powerwalk(source).pipe(stream)', function(t) {
   }
 
   function flush() {
-    t.same(files.sort(), fixtures.files)
+    t.same(files.sort(), expected('files'), 'should emit files on data')
     t.end()
   }
 })

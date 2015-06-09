@@ -7,14 +7,15 @@ const fs = require('graceful-fs')
 const objectType = require('./object-type')
 const extend = require('xtend')
 const defaults = {
-  // NOTE: prevents end from being called when there is not .on('data')
-  // highWaterMark: 16
+  symlinks: false,
+  highWaterMark: 16
 }
 
 module.exports = function walk(dirname, options, callback) {
-  // TODO: scrub args
-  if (dirname) {
-    dirname = path.resolve(dirname || '')
+  if (typeof dirname === 'object') {
+    callback = options
+    options = dirname
+    dirname = null
   }
 
   debug('starting walk at %s', dirname)
@@ -23,6 +24,8 @@ module.exports = function walk(dirname, options, callback) {
 
   // maybe do an fs.exisits to provide a non-mysterious error here.
   if (dirname) {
+    // TODO: move this resolution into the _transform method
+    dirname = path.resolve(dirname || '')
     stream.write(dirname)
   }
 
@@ -38,9 +41,14 @@ function Powerwalk(options) {
 
   var powerwalk = this
 
-  prr(powerwalk, '_q', [])
-
   Transform.call(powerwalk, options)
+
+  prr(powerwalk, 'options', options)
+  prr(powerwalk, '_q', [])
+  prr(powerwalk, '_symlinks', [])
+  // prr(Powerwalk, '_started', false)
+
+  powerwalk.on('symlink', push(powerwalk._symlinks))
 }
 
 inherits(Powerwalk, Transform)
@@ -50,6 +58,13 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
 
   var powerwalk = this
   var pathname = buffer.toString()
+
+  // // before anything setup things on first write
+  // // * path resolver
+  // if (! powerwalk._started) {
+  //   powerwalk._started = true
+  // }
+  // // end first write setup
 
   powerwalk.queue(pathname)
 
@@ -69,6 +84,9 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
       case 'file':
         callback(null, pathname)
         powerwalk.dequeue(pathname)
+        break;
+      case 'symlink':
+        readlink(pathname, powerwalk, callback)
         break;
     }
   })
@@ -99,6 +117,15 @@ Powerwalk.prototype.dequeue = function(pathname) {
 
 Powerwalk.prototype._flush = function(callback) {
   debug('_flush')
+
+  var powerwalk = this
+
+  // Experimental: This might be a bad idea since data events are queued and the
+  // read stream might not be hooked up til later.
+  // if (powerwalk.listeners('data').length === 0) {
+  //   powerwalk.on('data', noop)
+  // }
+
   callback()
 }
 
@@ -118,3 +145,58 @@ function readdir(pathname, powerwalk, callback) {
     powerwalk.dequeue(pathname)
   }
 }
+
+// On a symlink there are two properties:
+// * The linkname
+// * the actual path of the link
+//
+// For instance one/two-symlink is actuall ../two
+//
+// This should be kept track of for each symlink to possilby prevent recurrion
+// loops.
+//
+// Or keep track of emitted paths and DRY
+function readlink(pathname, powerwalk, callback) {
+  debug('readlink %s', pathname, powerwalk.options)
+
+  var walked = powerwalk._symlinks
+
+  if (powerwalk.options.symlinks && !contains(walked, pathname)) {
+    fs.readlink(pathname, done)
+  } else {
+    done()
+  }
+
+  function done(err, link) {
+    if (err) return callback(err)
+
+    if (link) {
+      var dirname = path.dirname(pathname)
+      var resolved = path.resolve(dirname, link)
+
+      debug('link %s', link)
+      debug('resolved %s', resolved)
+
+      callback(null, pathname)
+      powerwalk.write(resolved)
+    } else {
+      callback()
+    }
+
+    powerwalk.dequeue(pathname)
+  }
+}
+
+function contains(array, item) {
+  return array.indexOf(item) !== -1
+}
+
+function push(array) {
+  return callback
+
+  function callback(pathname) {
+    array.push(pathname)
+  }
+}
+
+function noop(){}
