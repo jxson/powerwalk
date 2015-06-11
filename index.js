@@ -6,6 +6,8 @@ const prr = require('prr')
 const fs = require('graceful-fs')
 const objectType = require('./object-type')
 const extend = require('xtend')
+const errno = require('errno')
+const format = require('util').format
 const defaults = {
   symlinks: false,
   highWaterMark: 16
@@ -45,10 +47,10 @@ function Powerwalk(options) {
 
   prr(powerwalk, 'options', options)
   prr(powerwalk, '_q', [])
-  prr(powerwalk, '_symlinks', [])
+  prr(powerwalk, '_walked', [])
   // prr(Powerwalk, '_started', false)
 
-  powerwalk.on('symlink', push(powerwalk._symlinks))
+  powerwalk.on('path', push(powerwalk._walked))
 }
 
 inherits(Powerwalk, Transform)
@@ -57,6 +59,7 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
   debug('transform %s', buffer)
 
   var powerwalk = this
+  var options = powerwalk.options
   var pathname = buffer.toString()
 
   // // before anything setup things on first write
@@ -69,34 +72,91 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
   powerwalk.queue(pathname)
 
   fs.lstat(pathname, function(err, stats) {
-    if (err) return callback(err)
+    if (err) {
+      return callback(error(err, 'lstat', pathname))
+    }
+
+    powerwalk.emit('stat', pathname, stats)
 
     var type = objectType(stats)
 
-    powerwalk.emit('path', pathname)
-    powerwalk.emit('stat', pathname, stats)
-    powerwalk.emit(type, pathname)
-
     switch (type) {
       case 'directory':
-        readdir(pathname, powerwalk, callback)
-        break;
+        fs.readdir(pathname, function ondir(err, results) {
+          if (err) return callback(err)
+
+          var length = results.length
+          for (var i = 0; i < length; i++) {
+            var resolved = path.resolve(pathname, results[i])
+            powerwalk.write(resolved)
+          }
+
+          callback()
+          powerwalk.dequeue(pathname, 'directory')
+        })
+
+        break
       case 'file':
         callback(null, pathname)
-        powerwalk.dequeue(pathname)
-        break;
+        powerwalk.dequeue(pathname, 'file')
+        break
       case 'symlink':
-        readlink(pathname, powerwalk, callback)
-        break;
+        // On a symlink there are two properties:
+        // * The linkname
+        // * the actual path of the link
+        //
+        // For instance one/two-symlink is actually ../two
+        //
+        // This should be kept track of for each symlink to possilby prevent recurrion
+        // loops.
+        //
+        // Or keep track of emitted paths and DRY
+        var walked = powerwalk.walked(pathname)
+        var shouldSkip = ! options.symlinks || walked
+
+        debug('shouldSkip: %s', shouldSkip)
+
+        if (shouldSkip) {
+          debug('skipping link: %s', pathname)
+          callback()
+          powerwalk.dequeue(pathname)
+          break
+        }
+
+        fs.readlink(pathname, function onlinl(err, link) {
+          if (err) {
+            return callback(error(err, 'readlink', pathname))
+          }
+
+          var dirname = path.dirname(pathname)
+          var resolved = path.resolve(dirname, link)
+
+          debug('symlink %s', pathname)
+          debug('symlink resolved: %s', resolved)
+          powerwalk.write(resolved)
+
+          callback()
+          powerwalk.dequeue(pathname, 'symlink')
+        })
+
+        break
+      default:
+        callback()
+        powerwalk.dequeue(pathname, type)
+        break
     }
   })
+}
+
+Powerwalk.prototype.walked = function(pathname) {
+  return contains(this._walked, pathname)
 }
 
 Powerwalk.prototype.queue = function(pathname) {
   this._q.push(pathname)
 }
 
-Powerwalk.prototype.dequeue = function(pathname) {
+Powerwalk.prototype.dequeue = function(pathname, type) {
   var powerwalk = this
   var start = powerwalk._q.indexOf(pathname)
   var deleteCount = 1
@@ -106,6 +166,14 @@ Powerwalk.prototype.dequeue = function(pathname) {
     var err = new Error('Can not dequeue items that have not been queued.')
     powerwalk.emit('error', err)
     return
+  }
+
+  if (! powerwalk.walked(pathname)) {
+    powerwalk.emit('path', pathname)
+
+    if (type) {
+      powerwalk.emit(type, pathname)
+    }
   }
 
   if (powerwalk._q.length === 0) {
@@ -129,63 +197,6 @@ Powerwalk.prototype._flush = function(callback) {
   callback()
 }
 
-function readdir(pathname, powerwalk, callback) {
-  fs.readdir(pathname, done)
-
-  function done(err, results) {
-    if (err) return callback(err)
-
-    var length = results.length
-    for (var i = 0; i < length; i++) {
-      var resolved = path.resolve(pathname, results[i])
-      powerwalk.write(resolved)
-    }
-
-    callback()
-    powerwalk.dequeue(pathname)
-  }
-}
-
-// On a symlink there are two properties:
-// * The linkname
-// * the actual path of the link
-//
-// For instance one/two-symlink is actuall ../two
-//
-// This should be kept track of for each symlink to possilby prevent recurrion
-// loops.
-//
-// Or keep track of emitted paths and DRY
-function readlink(pathname, powerwalk, callback) {
-  debug('readlink %s', pathname, powerwalk.options)
-
-  var walked = powerwalk._symlinks
-
-  if (powerwalk.options.symlinks && !contains(walked, pathname)) {
-    fs.readlink(pathname, done)
-  } else {
-    done()
-  }
-
-  function done(err, link) {
-    if (err) return callback(err)
-
-    if (link) {
-      var dirname = path.dirname(pathname)
-      var resolved = path.resolve(dirname, link)
-
-      debug('link %s', link)
-      debug('resolved %s', resolved)
-
-      callback(null, pathname)
-      powerwalk.write(resolved)
-    } else {
-      callback()
-    }
-
-    powerwalk.dequeue(pathname)
-  }
-}
 
 function contains(array, item) {
   return array.indexOf(item) !== -1
@@ -200,3 +211,21 @@ function push(array) {
 }
 
 function noop(){}
+
+function error(err, method, pathname) {
+  var code = err.code || -1
+  var description = ''
+
+  if (errno.code[code]) {
+    description = errno.code[code].description
+  } else {
+    description = 'unknown error'
+  }
+
+  var message = format('%s "%s" failed: %s', method, pathname, description)
+
+  err.message = message
+  err.pathname = pathname
+
+  return err
+}

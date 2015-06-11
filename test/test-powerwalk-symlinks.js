@@ -13,7 +13,7 @@ test('follow symlinks', function(t) {
   var files = []
   var directories = []
 
-  powerwalk({ symlinks: true })
+  powerwalk(dirname, { symlinks: true })
   .on('error', error(t))
   .on('data', noop)
   .on('path', push(paths))
@@ -27,10 +27,20 @@ test('follow symlinks', function(t) {
     t.same(directories, expected('directories'), 'should emit directories')
     t.end()
   })
-  .write(dirname)
 })
 
-test.skip('follow symlinks - error', function(t) {
-  // follow bad symlink
-  t.end()
+test('follow symlinks - error: bad symlink', function(t) {
+  var dirname = helpers.resolve('nightmares/errors')
+  var errno = require('errno')
+
+  powerwalk(dirname, { symlinks: true })
+  .on('data', noop)
+  .on('error', function(err) {
+    t.ok(err.message.match(errno.code.ENOENT), 'should have a nice message')
+    t.ok(err.stack, 'should have a stack')
+    t.ok(err.errno, 'should preserve errno')
+    t.ok(err.code, 'should preserve code')
+    t.equal(err.pathname, helpers.resolve('nightmares/errors/does-not-exist'))
+    t.end()
+  })
 })
