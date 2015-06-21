@@ -1,6 +1,7 @@
 const debug = require('debug')('powerwalk')
 const path = require('path')
 const Transform = require('readable-stream/transform')
+const eos = require('end-of-stream')
 const inherits = require('inherits')
 const prr = require('prr')
 const fs = require('graceful-fs')
@@ -14,15 +15,35 @@ const defaults = {
 }
 
 module.exports = function walk(dirname, options, callback) {
-  if (typeof dirname === 'object') {
-    callback = options
-    options = dirname
-    dirname = null
+  var length = arguments.length
+  for (var i = 0; i < length; i++) {
+    switch (typeof arguments[i]) {
+      case 'string':
+        dirname = arguments[i]
+        break;
+      case 'object':
+        options = arguments[i]
+        break;
+      case 'function':
+        callback = arguments[i]
+        break;
+    }
   }
 
   debug('starting walk at %s', dirname)
 
   var stream = new Powerwalk(options)
+
+  if (callback) {
+    var results = []
+
+    stream.on('data', push(results))
+
+    eos(stream, function endofstream(err) {
+      if (err) return callback(err)
+      else return callback(err, results)
+    })
+  }
 
   // maybe do an fs.exisits to provide a non-mysterious error here.
   if (dirname) {
@@ -48,7 +69,6 @@ function Powerwalk(options) {
   prr(powerwalk, 'options', options)
   prr(powerwalk, '_q', [])
   prr(powerwalk, '_walked', [])
-  // prr(Powerwalk, '_started', false)
 
   powerwalk.on('path', push(powerwalk._walked))
 }
@@ -205,8 +225,8 @@ function contains(array, item) {
 function push(array) {
   return callback
 
-  function callback(pathname) {
-    array.push(pathname)
+  function callback(buffer) {
+    array.push(buffer.toString())
   }
 }
 
