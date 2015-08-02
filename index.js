@@ -14,7 +14,10 @@ const defaults = {
   highWaterMark: 16
 }
 
-module.exports = function walk(dirname, options, callback) {
+module.exports = walk
+module.exports.Powerwalk = Powerwalk
+
+function walk(dirname, options, callback) {
   var length = arguments.length
   for (var i = 0; i < length; i++) {
     switch (typeof arguments[i]) {
@@ -55,10 +58,16 @@ module.exports = function walk(dirname, options, callback) {
   return stream
 }
 
-module.exports.Powerwalk = Powerwalk
-
 function Powerwalk(options) {
+  if (! (this instanceof Powerwalk)) {
+    return new Powerwalk(options)
+  }
+
   options = extend(defaults, options)
+
+  if (!(options.ignore instanceof Array)) {
+    options.ignore = [ options.ignore ]
+  }
 
   debug('initializing: %o', options)
 
@@ -81,6 +90,13 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
   var powerwalk = this
   var options = powerwalk.options
   var pathname = buffer.toString()
+
+  if (contains(powerwalk.options.ignore, pathname)) {
+    debug('ignoring: %s', pathname)
+
+    callback()
+    return
+  }
 
   // // before anything setup things on first write
   // // * path resolver
