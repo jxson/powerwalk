@@ -11,7 +11,8 @@ const errno = require('errno')
 const format = require('util').format
 const defaults = {
   symlinks: false,
-  highWaterMark: 16
+  highWaterMark: 16,
+  emit: 'file'
 }
 
 module.exports = walk
@@ -69,6 +70,9 @@ function Powerwalk(options) {
     options.ignore = [ options.ignore ]
   }
 
+  // TODO: gaurd against invalid object types so options.emit: 'garabage'
+  // doesn't cause problems
+
   debug('initializing: %o', options)
 
   var powerwalk = this
@@ -93,7 +97,6 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
 
   if (contains(powerwalk.options.ignore, pathname)) {
     debug('ignoring: %s', pathname)
-
     callback()
     return
   }
@@ -117,6 +120,9 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
     var type = objectType(stats)
 
     switch (type) {
+      case 'file':
+        powerwalk.dequeue(pathname, type, callback)
+        break
       case 'directory':
         fs.readdir(pathname, function ondir(err, results) {
           if (err) return callback(err)
@@ -127,14 +133,9 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
             powerwalk.write(resolved)
           }
 
-          callback()
-          powerwalk.dequeue(pathname, 'directory')
+          powerwalk.dequeue(pathname, type, callback)
         })
 
-        break
-      case 'file':
-        callback(null, pathname)
-        powerwalk.dequeue(pathname, 'file')
         break
       case 'symlink':
         // On a symlink there are two properties:
@@ -154,8 +155,7 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
 
         if (shouldSkip) {
           debug('skipping link: %s', pathname)
-          callback()
-          powerwalk.dequeue(pathname)
+          powerwalk.dequeue(pathname, type, callback)
           break
         }
 
@@ -170,20 +170,19 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
           debug('symlink %s', pathname)
           debug('symlink resolved: %s', resolved)
           powerwalk.write(resolved)
-
-          callback()
-          powerwalk.dequeue(pathname, 'symlink')
+          powerwalk.dequeue(pathname, type, callback)
         })
 
         break
       default:
-        callback()
-        powerwalk.dequeue(pathname, type)
+        powerwalk.dequeue(pathname, type, callback)
         break
     }
   })
 }
 
+// NOTE: this is to keep track of walked symlinks, instead of tracking every
+// path it would be better to only treat symlinks in this way.
 Powerwalk.prototype.walked = function(pathname) {
   return contains(this._walked, pathname)
 }
@@ -192,7 +191,7 @@ Powerwalk.prototype.queue = function(pathname) {
   this._q.push(pathname)
 }
 
-Powerwalk.prototype.dequeue = function(pathname, type) {
+Powerwalk.prototype.dequeue = function(pathname, type, callback) {
   var powerwalk = this
   var start = powerwalk._q.indexOf(pathname)
   var deleteCount = 1
@@ -206,10 +205,14 @@ Powerwalk.prototype.dequeue = function(pathname, type) {
 
   if (! powerwalk.walked(pathname)) {
     powerwalk.emit('path', pathname)
+    powerwalk.emit(type, pathname)
+  }
 
-    if (type) {
-      powerwalk.emit(type, pathname)
-    }
+  if (type === powerwalk.options.emit) {
+    debug('%s: %s', type, pathname)
+    callback(null, pathname)
+  } else {
+    callback()
   }
 
   if (powerwalk._q.length === 0) {
