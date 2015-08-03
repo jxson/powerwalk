@@ -13,7 +13,7 @@ test('powerwalk(dirname) - events', function(t) {
   var directories = []
 
   powerwalk(dirname)
-  .on('error', error)
+  .on('error', error(t))
   .on('data', noop)
   .on('path', push(paths))
   .on('file', push(files))

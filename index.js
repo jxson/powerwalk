@@ -72,6 +72,7 @@ function Powerwalk(options) {
 
   // TODO: gaurd against invalid object types so options.emit: 'garabage'
   // doesn't cause problems
+  // TODO: assert options.depth is a number
 
   debug('initializing: %o', options)
 
@@ -80,6 +81,7 @@ function Powerwalk(options) {
   Transform.call(powerwalk, options)
 
   prr(powerwalk, 'options', options)
+  prr(powerwalk, 'depth', 0, { writable: true })
   prr(powerwalk, '_q', [])
   prr(powerwalk, '_walked', [])
 
@@ -124,6 +126,15 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
         powerwalk.dequeue(pathname, type, callback)
         break
       case 'directory':
+        powerwalk.depth++
+        debug('depth: %s', powerwalk.depth)
+
+        // stop recursing if depth has been reached...
+        if (powerwalk.options.depth && powerwalk.options.depth === powerwalk.depth) {
+          powerwalk.dequeue(pathname, type, callback)
+          break
+        }
+
         fs.readdir(pathname, function ondir(err, results) {
           if (err) return callback(err)
 

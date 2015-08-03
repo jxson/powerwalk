@@ -1,4 +1,5 @@
 const path = require('path')
+const buffer = require('buffer')
 const expectations = {
   dreams: {
     'dreams': 'directory',
@@ -77,6 +78,10 @@ function push(array) {
   return callback
 
   function callback(path) {
+    if (!!path.toString) {
+      path = path.toString()
+    }
+
     array.push(path)
     array.sort()
   }
