@@ -4,7 +4,6 @@ const Transform = require('readable-stream/transform')
 const eos = require('end-of-stream')
 const inherits = require('inherits')
 const prr = require('prr')
-const fs = require('graceful-fs')
 const objectType = require('./object-type')
 const extend = require('xtend')
 const errno = require('errno')
@@ -12,7 +11,8 @@ const format = require('util').format
 const defaults = {
   symlinks: false,
   highWaterMark: 16,
-  emit: 'file'
+  emit: 'file',
+  fs: require('graceful-fs')
 }
 
 module.exports = walk
@@ -96,6 +96,7 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
   var powerwalk = this
   var options = powerwalk.options
   var pathname = buffer.toString()
+  var fs = powerwalk.options.fs
 
   if (contains(powerwalk.options.ignore, pathname)) {
     debug('ignoring: %s', pathname)
