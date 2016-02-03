@@ -82,8 +82,20 @@ function Powerwalk(options) {
 
   prr(powerwalk, 'options', options)
   prr(powerwalk, 'depth', 0, { writable: true })
-  prr(powerwalk, '_q', [])
   prr(powerwalk, '_walked', [])
+  prr(powerwalk, '_queue', {})
+
+  powerwalk.on('drain', function() {
+    debug('drain');
+
+    // Temporary workaround for races with the current queue.
+    var length = Object.keys(powerwalk._queue).length;
+    if (length === 0 && !powerwalk.isPaused()) {
+      debug('empty queue');
+      powerwalk.end();
+    }
+
+  });
 
   powerwalk.on('path', push(powerwalk._walked))
 }
@@ -111,7 +123,7 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
   // }
   // // end first write setup
 
-  powerwalk.queue(pathname)
+  powerwalk.enqueue(pathname)
 
   fs.lstat(pathname, function(err, stats) {
     if (err) {
@@ -199,54 +211,41 @@ Powerwalk.prototype.walked = function(pathname) {
   return contains(this._walked, pathname)
 }
 
-Powerwalk.prototype.queue = function(pathname) {
-  this._q.push(pathname)
+Powerwalk.prototype.enqueue = function(pathname) {
+  this._queue[pathname] = pathname;
 }
 
 Powerwalk.prototype.dequeue = function(pathname, type, callback) {
-  var powerwalk = this
-  var start = powerwalk._q.indexOf(pathname)
-  var deleteCount = 1
-  var removed = powerwalk._q.splice(start, deleteCount)[0]
+  debug('dequeue: %s', pathname);
 
-  if (! removed) {
-    var err = new Error('Can not dequeue items that have not been queued.')
-    powerwalk.emit('error', err)
-    return
-  }
+  var powerwalk = this
 
   if (! powerwalk.walked(pathname)) {
     powerwalk.emit('path', pathname)
     powerwalk.emit(type, pathname)
   }
 
+  var pushed = true;
   if (type === powerwalk.options.emit) {
     debug('%s: %s', type, pathname)
-    callback(null, pathname)
-  } else {
-    callback()
+    pushed = powerwalk.push(pathname)
   }
 
-  if (powerwalk._q.length === 0) {
-    powerwalk.end()
-  }
+  debug('paused: %s', powerwalk.isPaused());
+  debug('pushed: %s', pushed);
 
-  return removed
+  delete powerwalk._queue[pathname]
+
+  debug('===========');
+
+  callback();
 }
 
 Powerwalk.prototype._flush = function(callback) {
   debug('_flush')
-
-  var powerwalk = this
-
-  // Experimental: This might be a bad idea since data events are queued and the
-  // read stream might not be hooked up til later.
-  // if (powerwalk.listeners('data').length === 0) {
-  //   powerwalk.on('data', noop)
-  // }
-
   callback()
 }
+
 
 
 function contains(array, item) {
