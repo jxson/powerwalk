@@ -12,10 +12,11 @@ test('follow symlinks', function(t) {
   var symlinks = []
   var files = []
   var directories = []
+  var output = []
 
   powerwalk(dirname, { symlinks: true })
   .on('error', error(t))
-  .on('data', noop)
+  .on('data', push(output))
   .on('path', push(paths))
   .on('symlink', push(symlinks))
   .on('file', push(files))
@@ -24,6 +25,7 @@ test('follow symlinks', function(t) {
     t.same(symlinks, expected('symlinks'), 'should emit symlinks')
     t.same(paths, expected(), 'should emit paths')
     t.same(files, expected('files'), 'should emit files')
+    t.same(output, expected('files'), 'should stream files')
     t.same(directories, expected('directories'), 'should emit directories')
     t.end()
   })

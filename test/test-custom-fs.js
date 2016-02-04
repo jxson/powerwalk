@@ -16,7 +16,7 @@ test('options - custom fs', function(t) {
   }
 
   powerwalk(dirname, options, function(err, results) {
-    t.error(err)
+    t.error(err, 'powerwalk should not fail', dirname)
     t.same(directories, expected('directories'), 'should call custom fs.readdir')
     t.end()
   })

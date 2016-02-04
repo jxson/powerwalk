@@ -11,8 +11,9 @@ test('options - change emitted data values', function(t) {
   }
 
   powerwalk(dirname, options, function(err, results) {
-    t.error(err)
-    t.same(results.sort(), expected('directories'), 'should callback with directories')
+    t.error(err, 'powerwalk should not fail')
+    t.same(results.sort(), expected('directories'),
+      'should callback with directories')
     t.end()
   })
 })

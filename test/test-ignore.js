@@ -9,7 +9,7 @@ test('options - ignore', function(t) {
   }
 
   powerwalk(dirname, options, function(err, results) {
-    t.error(err)
+    t.error(err, 'powerwalk should not fail')
     t.equal(results.length, 1)
     t.same(results, [ helpers.resolve('dreams/a-dream/foo.md') ])
     t.end()

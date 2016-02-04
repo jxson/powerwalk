@@ -1,13 +1,14 @@
 const debug = require('debug')('powerwalk')
-const path = require('path')
-const Transform = require('readable-stream/transform')
+const Duplex = require('readable-stream/duplex')
 const eos = require('end-of-stream')
-const inherits = require('inherits')
-const prr = require('prr')
-const objectType = require('./object-type')
-const extend = require('xtend')
 const errno = require('errno')
+const extend = require('xtend')
 const format = require('util').format
+const inherits = require('inherits')
+const objectType = require('./object-type')
+const path = require('path')
+const prr = require('prr')
+
 const defaults = {
   symlinks: false,
   highWaterMark: 16,
@@ -34,7 +35,8 @@ function walk(dirname, options, callback) {
     }
   }
 
-  debug('starting walk at %s', dirname)
+  options = options || {}
+  options.dirname = path.resolve(dirname || '')
 
   var stream = new Powerwalk(options)
 
@@ -43,16 +45,18 @@ function walk(dirname, options, callback) {
 
     stream.on('data', push(results))
 
-    eos(stream, function endofstream(err) {
+    // PowerWalk is a Duplex Stream, in the callback case we want to know when
+    // the stream is done writing so the results or error can be returned at
+    // that time.
+    eos(stream, { writable: false }, function endofstream(err) {
       if (err) return callback(err)
       else return callback(err, results)
     })
   }
 
-  // maybe do an fs.exisits to provide a non-mysterious error here.
+  // Start the stream if dirname is passed in.
+  // TODO: Do an fs.exisits to provide a non-mysterious error here.
   if (dirname) {
-    // TODO: move this resolution into the _transform method
-    dirname = path.resolve(dirname || '')
     stream.write(dirname)
   }
 
@@ -74,116 +78,164 @@ function Powerwalk(options) {
   // doesn't cause problems
   // TODO: assert options.depth is a number
 
-  debug('initializing: %o', options)
-
   var powerwalk = this
 
-  Transform.call(powerwalk, options)
+  Duplex.call(powerwalk, options)
 
-  prr(powerwalk, 'options', options)
-  prr(powerwalk, 'depth', 0, { writable: true })
-  prr(powerwalk, '_walked', [])
-  prr(powerwalk, '_queue', {})
+  prr(powerwalk, '_maxDepth', options.depth)
+  prr(powerwalk, '_fs', options.fs)
+  prr(powerwalk, '_ignore', options.ignore)
+  prr(powerwalk, '_emit', options.emit)
+  prr(powerwalk, '_symlinks', options.symlinks)
 
-  powerwalk.on('drain', function() {
-    debug('drain');
+  prr(powerwalk, '_queue', [])
+  // TODO: Use an array for the pending items.
+  prr(powerwalk, '_walking', {})
+  prr(powerwalk, '_symlinked', []);
 
-    // Temporary workaround for races with the current queue.
-    var length = Object.keys(powerwalk._queue).length;
-    if (length === 0 && !powerwalk.isPaused()) {
-      debug('empty queue');
-      powerwalk.end();
-    }
-
-  });
-
-  powerwalk.on('path', push(powerwalk._walked))
+  // Keep track of symlinks since they can cause recursion cycles.
+  // TODO: Remove listener on end.
+  powerwalk.on('symlinked', push(  powerwalk._symlinked))
 }
 
-inherits(Powerwalk, Transform)
+inherits(Powerwalk, Duplex)
 
-Powerwalk.prototype._transform = function (buffer, enc, callback) {
-  debug('transform %s', buffer)
+Powerwalk.prototype._read = function(size) {
+  var stream = this
+  stream.dequeue()
+}
 
-  var powerwalk = this
-  var options = powerwalk.options
+Powerwalk.prototype._write = function(buffer, encoding, callback) {
+  var stream = this
   var pathname = buffer.toString()
-  var fs = powerwalk.options.fs
 
-  if (contains(powerwalk.options.ignore, pathname)) {
-    debug('ignoring: %s', pathname)
-    callback()
+  // The first pathname will be treated as the _source to help with subsequent
+  // path resolution
+  if (!stream._source) {
+    prr(stream, '_source', pathname)
+  }
+
+  stream.enqueue(pathname, callback)
+}
+
+Powerwalk.prototype.enqueue = function(pathname, callback) {
+  callback = callback || ifError
+  var stream = this
+
+  stream._queue.push({
+    pathname: pathname,
+    callback: callback
+  })
+
+  function ifError(err) {
+    if (err) stream.emit('error', err)
+  }
+}
+
+Powerwalk.prototype.dequeue = function() {
+  // It's possible for the queue to be empty at this point but with pending
+  // async functions.
+  var stream = this
+  var entry = stream._queue.shift()
+
+  if (!entry) {
+    if (Object.keys(stream._walking).length === 0) {
+      stream.push(null)
+      stream.end()
+    }
+
     return
   }
 
-  // // before anything setup things on first write
-  // // * path resolver
-  // if (! powerwalk._started) {
-  //   powerwalk._started = true
-  // }
-  // // end first write setup
+  var pathname = entry.pathname
+  var callback = entry.callback
 
-  powerwalk.enqueue(pathname)
+  stream._walking[pathname] = pathname
+  stream.walk(pathname, function(err, type, children) {
+    if (err) return callback(err)
 
-  fs.lstat(pathname, function(err, stats) {
-    if (err) {
-      return callback(error(err, 'lstat', pathname))
+    var length = children.length
+    for (var i = 0; i < length; i++) {
+      stream.enqueue(children[i])
     }
 
-    powerwalk.emit('stat', pathname, stats)
+    delete stream._walking[pathname]
+
+    if (!stream.symlinked(pathname)) {
+      stream.emit('path', pathname)
+    }
+
+    if (type === stream._emit) {
+      // If there is a successful push dequeue again, if not the stream is
+      // paused and dequeue will resume once the consuming stream triggers a
+      // call to _read.
+      if (stream.push(pathname)) {
+        stream.dequeue()
+      }
+    } else {
+      // Nothing to push into the pipeline, kick of another walk.
+      stream.dequeue()
+    }
+
+    callback()
+  })
+}
+
+Powerwalk.prototype.walk = function(pathname, callback) {
+  var stream = this
+  var children = []
+
+  // Ignore any items in the ignored array.
+  if (contains(stream._ignore, pathname)) {
+    callback(null, 'ignored', children)
+    return
+  }
+
+  var _fs = stream._fs
+
+  _fs.lstat(pathname, function(err, stats) {
+    if (err) return callback(error(err, 'lstat', pathname))
+
+    stream.emit('stat', pathname, stats)
 
     var type = objectType(stats)
 
-    switch (type) {
-      case 'file':
-        powerwalk.dequeue(pathname, type, callback)
-        break
+    switch(type) {
       case 'directory':
-        powerwalk.depth++
-        debug('depth: %s', powerwalk.depth)
+        // NOTE: A relative path of "" or "foo" will both have a depth of one
+        // giving an incorrect depth. Adding to the depth produces correct
+        // results for limiting.
+        var relative = path.relative(stream._source, pathname)
+        var depth = relative.split(path.sep).length + 1
 
-        // stop recursing if depth has been reached...
-        if (powerwalk.options.depth && powerwalk.options.depth === powerwalk.depth) {
-          powerwalk.dequeue(pathname, type, callback)
+        // Stop recurrion depth has been reached.
+        if (depth === stream._maxDepth) {
+          callback(null, type, children)
           break
         }
 
-        fs.readdir(pathname, function ondir(err, results) {
+        if (stream.symlinked(pathname)) {
+          debug('symlink relationship already walked')
+          callback(null, type, children)
+          break
+        }
+
+        _fs.readdir(pathname, function ondir(err, results) {
           if (err) return callback(err)
 
           var length = results.length
           for (var i = 0; i < length; i++) {
             var resolved = path.resolve(pathname, results[i])
-            powerwalk.write(resolved)
+            children.push(resolved)
           }
 
-          powerwalk.dequeue(pathname, type, callback)
+          callback(null, type, children)
         })
-
         break
       case 'symlink':
-        // On a symlink there are two properties:
-        // * The linkname
-        // * the actual path of the link
-        //
-        // For instance one/two-symlink is actually ../two
-        //
-        // This should be kept track of for each symlink to possilby prevent recurrion
-        // loops.
-        //
-        // Or keep track of emitted paths and DRY
-        var walked = powerwalk.walked(pathname)
-        var shouldSkip = ! options.symlinks || walked
-
-        debug('shouldSkip: %s', shouldSkip)
-
-        if (shouldSkip) {
-          debug('skipping link: %s', pathname)
-          powerwalk.dequeue(pathname, type, callback)
-          break
-        }
-
-        fs.readlink(pathname, function onlinl(err, link) {
+        // On a symlink there are two properties, the original pathname and
+        // the resolved path of where the symlink links to (it's origin).
+        _fs.readlink(pathname, function onlink(err, link) {
           if (err) {
             return callback(error(err, 'readlink', pathname))
           }
@@ -191,62 +243,25 @@ Powerwalk.prototype._transform = function (buffer, enc, callback) {
           var dirname = path.dirname(pathname)
           var resolved = path.resolve(dirname, link)
 
-          debug('symlink %s', pathname)
-          debug('symlink resolved: %s', resolved)
-          powerwalk.write(resolved)
-          powerwalk.dequeue(pathname, type, callback)
+          stream.emit('symlinked', resolved)
+          callback(null, type, [ resolved ])
         })
 
         break
       default:
-        powerwalk.dequeue(pathname, type, callback)
+        callback(null, type, children)
         break
+    }
+
+    if (!stream.symlinked(pathname)) {
+      stream.emit(type, pathname)
     }
   })
 }
 
-// NOTE: this is to keep track of walked symlinks, instead of tracking every
-// path it would be better to only treat symlinks in this way.
-Powerwalk.prototype.walked = function(pathname) {
-  return contains(this._walked, pathname)
+Powerwalk.prototype.symlinked = function(resolved) {
+  return contains(this._symlinked, resolved)
 }
-
-Powerwalk.prototype.enqueue = function(pathname) {
-  this._queue[pathname] = pathname;
-}
-
-Powerwalk.prototype.dequeue = function(pathname, type, callback) {
-  debug('dequeue: %s', pathname);
-
-  var powerwalk = this
-
-  if (! powerwalk.walked(pathname)) {
-    powerwalk.emit('path', pathname)
-    powerwalk.emit(type, pathname)
-  }
-
-  var pushed = true;
-  if (type === powerwalk.options.emit) {
-    debug('%s: %s', type, pathname)
-    pushed = powerwalk.push(pathname)
-  }
-
-  debug('paused: %s', powerwalk.isPaused());
-  debug('pushed: %s', pushed);
-
-  delete powerwalk._queue[pathname]
-
-  debug('===========');
-
-  callback();
-}
-
-Powerwalk.prototype._flush = function(callback) {
-  debug('_flush')
-  callback()
-}
-
-
 
 function contains(array, item) {
   return array.indexOf(item) !== -1
